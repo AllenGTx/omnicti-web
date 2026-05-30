@@ -1,0 +1,31 @@
+# API Keys & Secrets
+.env
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.Python
+
+# Node (jika pakai Node)
+node_modules/
+npm-debug.log
+.npm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ML Models (optional - upload ke Replit terpisah)
+*.joblib

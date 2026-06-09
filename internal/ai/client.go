@@ -1,27 +1,24 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
+	"time"
 
 	"domainscorer/internal/config"
 	"domainscorer/internal/normalize"
 
-	"github.com/google/generative-ai-go/genai"
 	"github.com/sashabaranov/go-openai"
-	"google.golang.org/api/option"
 )
 
 // AIClient defines the interface for an AI analysis client.
-// It abstracts the underlying AI provider (Gemini, OpenAI, Groq) to allow interchangeable use.
 type AIClient interface {
-	// AnalyzeFindings sends a list of findings to the configured AI provider for risk assessment.
-	// It returns a structured AnalysisResponse containing risk scores, summaries, and remediation steps.
 	AnalyzeFindings(ctx context.Context, target string, findings []normalize.Finding) (*AnalysisResponse, error)
-
-	// GenerateGlobalSummary synthesizes the individual provider analyses into a single executive summary.
 	GenerateGlobalSummary(ctx context.Context, target string, providerAnalyses []ProviderAnalysis) (*GlobalAnalysisResponse, error)
 }
 
@@ -35,13 +32,11 @@ type GlobalAnalysisResponse struct {
 // client implements the AIClient interface.
 type client struct {
 	cfg          *config.AIConfig
-	geminiClient *genai.GenerativeModel
-	openaiClient *openai.Client // Used for both OpenAI and Groq
+	openaiClient *openai.Client
+	httpClient   *http.Client
 }
 
-// NewAIClient creates a new client for AI analysis based on the provided configuration.
-// It initializes the appropriate client (Gemini, OpenAI, or Groq) based on the 'Provider' field in the config.
-// Returns an error if the configuration is missing, disabled, or if the API key is not set.
+// NewAIClient creates a new client for AI analysis.
 func NewAIClient(cfg *config.AIConfig) (AIClient, error) {
 	if cfg == nil || !cfg.Enabled {
 		return nil, fmt.Errorf("AI analysis is not enabled in the configuration")
@@ -50,52 +45,120 @@ func NewAIClient(cfg *config.AIConfig) (AIClient, error) {
 	switch cfg.Provider {
 	case "gemini":
 		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("Gemini API key is not configured (check .env GEMINI_API_KEY)")
+			return nil, fmt.Errorf("Gemini API key is not configured (check GEMINI_API_KEY)")
 		}
-		ctx := context.Background()
-		genaiClient, err := genai.NewClient(ctx, option.WithAPIKey(cfg.APIKey))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-		model := genaiClient.GenerativeModel(cfg.Model)
-		return &client{cfg: cfg, geminiClient: model}, nil
+		return &client{
+			cfg:        cfg,
+			httpClient: &http.Client{Timeout: 60 * time.Second},
+		}, nil
 
 	case "openai", "groq":
 		if cfg.APIKey == "" {
-			return nil, fmt.Errorf("%s API key is not configured (check .env)", cfg.Provider)
+			return nil, fmt.Errorf("%s API key is not configured", cfg.Provider)
 		}
-		config := openai.DefaultConfig(cfg.APIKey)
+		oaiCfg := openai.DefaultConfig(cfg.APIKey)
 		if cfg.Provider == "groq" {
-			config.BaseURL = "https://api.groq.com/openai/v1"
+			oaiCfg.BaseURL = "https://api.groq.com/openai/v1"
 		}
-		openaiClient := openai.NewClientWithConfig(config)
-		return &client{cfg: cfg, openaiClient: openaiClient}, nil
+		return &client{cfg: cfg, openaiClient: openai.NewClientWithConfig(oaiCfg)}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown AI provider '%s'", cfg.Provider)
 	}
 }
 
-// AnalyzeFindings sends the findings to the configured LLM and returns its analysis.
-// It constructs a detailed prompt including the findings and instructs the AI to act as a "Senior Cyber Risk Auditor".
-// The response is expected to be a valid JSON object matching the AnalysisResponse struct.
-func (c *client) AnalyzeFindings(ctx context.Context, target string, findings []normalize.Finding) (*AnalysisResponse, error) {
-	// Prepare input JSON
-	inputMap := map[string]any{
-		"target":   target,
-		"findings": findings,
+// callGeminiREST calls Gemini via plain HTTP REST (no gRPC dependency).
+func (c *client) callGeminiREST(ctx context.Context, prompt string) (string, error) {
+	type part struct {
+		Text string `json:"text"`
 	}
-	inputJSON, err := json.MarshalIndent(inputMap, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal findings to JSON: %w", err)
+	type content struct {
+		Parts []part `json:"parts"`
+	}
+	type reqBody struct {
+		Contents []content `json:"contents"`
 	}
 
-	// ---------------------------------------------------------
-	// PROMPT DEFINITION
-	// ---------------------------------------------------------
-	// ---------------------------------------------------------
-	// PROMPT DEFINITION
-	// ---------------------------------------------------------
+	body, _ := json.Marshal(reqBody{
+		Contents: []content{{Parts: []part{{Text: prompt}}}},
+	})
+
+	model := c.cfg.Model
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
+	url := fmt.Sprintf(
+		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
+		model, c.cfg.APIKey,
+	)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("Gemini HTTP request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Gemini API error %d: %s", resp.StatusCode, string(raw))
+	}
+
+	var gemResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(raw, &gemResp); err != nil {
+		return "", fmt.Errorf("failed to parse Gemini response: %w", err)
+	}
+	if len(gemResp.Candidates) == 0 || len(gemResp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("empty response from Gemini")
+	}
+	return gemResp.Candidates[0].Content.Parts[0].Text, nil
+}
+
+// callLLM dispatches to the right provider.
+func (c *client) callLLM(ctx context.Context, prompt string) (string, error) {
+	switch c.cfg.Provider {
+	case "gemini":
+		return c.callGeminiREST(ctx, prompt)
+	case "openai", "groq":
+		resp, err := c.openaiClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+			Model: c.cfg.Model,
+			Messages: []openai.ChatCompletionMessage{
+				{Role: openai.ChatMessageRoleUser, Content: prompt},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to generate content from %s: %w", c.cfg.Provider, err)
+		}
+		if len(resp.Choices) == 0 {
+			return "", fmt.Errorf("empty response from %s", c.cfg.Provider)
+		}
+		return resp.Choices[0].Message.Content, nil
+	default:
+		return "", fmt.Errorf("unhandled AI provider: %s", c.cfg.Provider)
+	}
+}
+
+// AnalyzeFindings sends findings to the configured LLM and returns structured analysis.
+func (c *client) AnalyzeFindings(ctx context.Context, target string, findings []normalize.Finding) (*AnalysisResponse, error) {
+	inputMap := map[string]any{"target": target, "findings": findings}
+	inputJSON, err := json.MarshalIndent(inputMap, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal findings: %w", err)
+	}
+
 	prompt := fmt.Sprintf(`
 ROLE
 
@@ -185,85 +248,22 @@ INPUT DATA:
 %s
 `, string(inputJSON))
 
-	// ---------------------------------------------------------
-	// EXECUTE REQUEST
-	// ---------------------------------------------------------
-
-	var rawResponse string
-
-	switch c.cfg.Provider {
-	case "gemini":
-		if c.geminiClient == nil {
-			return nil, fmt.Errorf("Gemini client is not initialized")
-		}
-		resp, err := c.geminiClient.GenerateContent(ctx, genai.Text(prompt))
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate content from Gemini: %w", err)
-		}
-		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("received an empty response from Gemini")
-		}
-		analysisResult, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("unexpected response format from Gemini")
-		}
-		rawResponse = string(analysisResult)
-
-	case "openai", "groq":
-		if c.openaiClient == nil {
-			return nil, fmt.Errorf("%s client is not initialized", c.cfg.Provider)
-		}
-		resp, err := c.openaiClient.CreateChatCompletion(
-			ctx,
-			openai.ChatCompletionRequest{
-				Model: c.cfg.Model,
-				Messages: []openai.ChatCompletionMessage{
-					{
-						Role:    openai.ChatMessageRoleUser,
-						Content: prompt,
-					},
-				},
-			},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate content from %s: %w", c.cfg.Provider, err)
-		}
-		if len(resp.Choices) == 0 {
-			return nil, fmt.Errorf("received an empty response from %s", c.cfg.Provider)
-		}
-		rawResponse = resp.Choices[0].Message.Content
-
-	default:
-		return nil, fmt.Errorf("unhandled AI provider: %s", c.cfg.Provider)
+	rawResponse, err := c.callLLM(ctx, prompt)
+	if err != nil {
+		return nil, err
 	}
 
 	cleanResp := cleanJSON(rawResponse)
-
 	var result AnalysisResponse
 	if err := json.Unmarshal([]byte(cleanResp), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse AI response: %w (raw: %s)", err, cleanResp)
 	}
-
 	return &result, nil
-}
-
-// cleanJSON sanitizes the raw string response from the AI.
-// It removes markdown code block delimiters (```json ... ```) to extract the raw JSON string.
-func cleanJSON(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	return strings.TrimSpace(s)
 }
 
 // GenerateGlobalSummary creates an executive summary from all provider analyses.
 func (c *client) GenerateGlobalSummary(ctx context.Context, target string, providerAnalyses []ProviderAnalysis) (*GlobalAnalysisResponse, error) {
-	// Prepare input JSON
-	inputMap := map[string]any{
-		"target":            target,
-		"provider_analyses": providerAnalyses,
-	}
+	inputMap := map[string]any{"target": target, "provider_analyses": providerAnalyses}
 	inputJSON, err := json.MarshalIndent(inputMap, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal provider analyses: %w", err)
@@ -280,10 +280,10 @@ You are provided with a list of "Provider Analyses". Each provider has already a
 
 OBJECTIVE
 
-1.  **Identify Cross-Cutting Themes:** If multiple providers report the same open port or vulnerability, highlight this as a corroborated fact.
-2.  **Executive Summary:** Write a high-level narrative (3-5 sentences) that explains the overall risk posture. Avoid technical jargon where possible, focusing on business risk.
-3.  **Global Impact:** Describe the worst-case scenario if the identified risks are exploited.
-4.  **Consolidated Remediation:** unique, high-priority action items.
+1.  Identify Cross-Cutting Themes: If multiple providers report the same open port or vulnerability, highlight this as a corroborated fact.
+2.  Executive Summary: Write a high-level narrative (3-5 sentences) that explains the overall risk posture. Avoid technical jargon where possible, focusing on business risk.
+3.  Global Impact: Describe the worst-case scenario if the identified risks are exploited.
+4.  Consolidated Remediation: unique, high-priority action items.
 
 OUTPUT REQUIREMENT (STRICT JSON)
 
@@ -300,61 +300,24 @@ INPUT:
 %s
 `, string(inputJSON))
 
-	// Execute Request (Reuse logic from AnalyzeFindings - strictly creating a helper might be better but for now we duplicate the switch for speed and creating a helper would be a larger refactor)
-	var rawResponse string
-
-	switch c.cfg.Provider {
-	case "gemini":
-		if c.geminiClient == nil {
-			return nil, fmt.Errorf("Gemini client is not initialized")
-		}
-		resp, err := c.geminiClient.GenerateContent(ctx, genai.Text(prompt))
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate content from Gemini: %w", err)
-		}
-		if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-			return nil, fmt.Errorf("received an empty response from Gemini")
-		}
-		analysisResult, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-		if !ok {
-			return nil, fmt.Errorf("unexpected response format from Gemini")
-		}
-		rawResponse = string(analysisResult)
-
-	case "openai", "groq":
-		if c.openaiClient == nil {
-			return nil, fmt.Errorf("%s client is not initialized", c.cfg.Provider)
-		}
-		resp, err := c.openaiClient.CreateChatCompletion(
-			ctx,
-			openai.ChatCompletionRequest{
-				Model: c.cfg.Model,
-				Messages: []openai.ChatCompletionMessage{
-					{
-						Role:    openai.ChatMessageRoleUser,
-						Content: prompt,
-					},
-				},
-			},
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate content from %s: %w", c.cfg.Provider, err)
-		}
-		if len(resp.Choices) == 0 {
-			return nil, fmt.Errorf("received an empty response from %s", c.cfg.Provider)
-		}
-		rawResponse = resp.Choices[0].Message.Content
-
-	default:
-		return nil, fmt.Errorf("unhandled AI provider: %s", c.cfg.Provider)
+	rawResponse, err := c.callLLM(ctx, prompt)
+	if err != nil {
+		return nil, err
 	}
 
 	cleanResp := cleanJSON(rawResponse)
-
 	var result GlobalAnalysisResponse
 	if err := json.Unmarshal([]byte(cleanResp), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse AI global summary: %w (raw: %s)", err, cleanResp)
 	}
-
 	return &result, nil
+}
+
+// cleanJSON sanitizes the raw string response from the AI.
+func cleanJSON(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimPrefix(s, "```json")
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSuffix(s, "```")
+	return strings.TrimSpace(s)
 }

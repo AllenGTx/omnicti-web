@@ -273,8 +273,9 @@ class Handler(BaseHTTPRequestHandler):
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    server = HTTPServer(('localhost', 5000), Handler)
-    print("[*] Phishing Detection Service → http://localhost:5000")
+    port = int(os.environ.get('PHISHING_PORT', 5001))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    print(f"[*] Phishing Detection Service → http://0.0.0.0:{port}")
     print(f"[*] Model: {'RandomForest 100 trees + TF-IDF 5000 features' if MODELS_LOADED else 'Heuristic only'}")
     groq_key = os.environ.get('GROQ_API_KEY', '')
     print(f"[*] Groq AI: {'✓ Ready' if groq_key else '✗ GROQ_API_KEY not set'}")

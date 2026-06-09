@@ -1,184 +1,228 @@
 package server
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"os"
-	"time"
+        "bytes"
+        "context"
+        "fmt"
+        "io"
+        "net/http"
+        "os"
+        "time"
 
-	"domainscorer/internal/aggregation"
-	"domainscorer/internal/ai"
-	"domainscorer/internal/config"
-	"domainscorer/internal/core"
-	"domainscorer/internal/ctisource/abuseipdb"
-	"domainscorer/internal/ctisource/alienvault"
-	"domainscorer/internal/ctisource/base"
-	"domainscorer/internal/ctisource/censys"
-	"domainscorer/internal/ctisource/ipinfo"
-	"domainscorer/internal/ctisource/leakix"
-	"domainscorer/internal/ctisource/shodan"
-	"domainscorer/internal/ctisource/threatbook"
-	"domainscorer/internal/ctisource/virustotal"
-	"domainscorer/internal/ctisource/zoomeye"
-	"domainscorer/internal/normalize"
-	"domainscorer/internal/report"
-	"domainscorer/internal/scoring"
+        "domainscorer/internal/aggregation"
+        "domainscorer/internal/ai"
+        "domainscorer/internal/config"
+        "domainscorer/internal/core"
+        "domainscorer/internal/ctisource/abuseipdb"
+        "domainscorer/internal/ctisource/alienvault"
+        "domainscorer/internal/ctisource/base"
+        "domainscorer/internal/ctisource/censys"
+        "domainscorer/internal/ctisource/ipinfo"
+        "domainscorer/internal/ctisource/leakix"
+        "domainscorer/internal/ctisource/shodan"
+        "domainscorer/internal/ctisource/threatbook"
+        "domainscorer/internal/ctisource/virustotal"
+        "domainscorer/internal/ctisource/zoomeye"
+        "domainscorer/internal/normalize"
+        "domainscorer/internal/report"
+        "domainscorer/internal/scoring"
 )
 
-// Start initializes and runs the HTTP server on the specified address.
-// It sets up route handlers for the landing page ("/") and the scan endpoint ("/scan").
-func Start(addr string) error {
-	http.HandleFunc("/", handleIndex)
-	http.HandleFunc("/scan", handleScan)
-	http.HandleFunc("/phishing", handlePhishing)
+var phishingHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
-	fmt.Printf("[*] Web Server listening on %s\n", addr)
-	return http.ListenAndServe(addr, nil)
+// Start initializes and runs the HTTP server on the specified address.
+func Start(addr string) error {
+        http.HandleFunc("/", handleIndex)
+        http.HandleFunc("/scan", handleScan)
+        http.HandleFunc("/phishing", handlePhishing)
+        http.HandleFunc("/api/phishing/predict", handlePhishingPredict)
+        http.HandleFunc("/api/phishing/analyze", handlePhishingAnalyze)
+
+        fmt.Printf("[*] Web Server listening on %s\n", addr)
+        return http.ListenAndServe(addr, nil)
+}
+
+// handlePhishingPredict proxies POST /api/phishing/predict → Python service :5001/predict
+func handlePhishingPredict(w http.ResponseWriter, r *http.Request) {
+        proxyToPhishingService(w, r, "http://localhost:5001/predict")
+}
+
+// handlePhishingAnalyze proxies POST /api/phishing/analyze → Python service :5001/analyze
+func handlePhishingAnalyze(w http.ResponseWriter, r *http.Request) {
+        proxyToPhishingService(w, r, "http://localhost:5001/analyze")
+}
+
+func proxyToPhishingService(w http.ResponseWriter, r *http.Request, targetURL string) {
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+                http.Error(w, "Failed to read request body", http.StatusBadRequest)
+                return
+        }
+        defer r.Body.Close()
+
+        req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, targetURL, bytes.NewReader(body))
+        if err != nil {
+                http.Error(w, "Failed to create proxy request", http.StatusInternalServerError)
+                return
+        }
+        req.Header.Set("Content-Type", "application/json")
+
+        resp, err := phishingHTTPClient.Do(req)
+        if err != nil {
+                http.Error(w, `{"error":"Phishing service tidak tersedia. Pastikan phishing_service.py berjalan."}`, http.StatusServiceUnavailable)
+                return
+        }
+        defer resp.Body.Close()
+
+        respBody, _ := io.ReadAll(resp.Body)
+        w.Header().Set("Content-Type", "application/json")
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.WriteHeader(resp.StatusCode)
+        w.Write(respBody)
 }
 
 func handlePhishing(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(phishingPageHTML))
+        w.Header().Set("Content-Type", "text/html")
+        w.Write([]byte(phishingPageHTML))
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(landingPageHTML))
+        if r.URL.Path != "/" {
+                http.NotFound(w, r)
+                return
+        }
+        w.Header().Set("Content-Type", "text/html")
+        w.Write([]byte(landingPageHTML))
 }
 
 // handleScan processes the domain scan request.
 // It orchestrates the discovery, CTI fetching, normalization, scoring, and AI analysis.
 // Finally, it renders the results using the HTML report structure.
 func handleScan(w http.ResponseWriter, r *http.Request) {
-	domain := r.FormValue("domain")
-	if domain == "" {
-		http.Error(w, "Domain is required", http.StatusBadRequest)
-		return
-	}
+        domain := r.FormValue("domain")
+        if domain == "" {
+                http.Error(w, "Domain is required", http.StatusBadRequest)
+                return
+        }
 
-	// Initialize sources (duplicated from main.go for now)
-	// ideally this should be shared, but keeping it simple for this task.
-	sources := []base.Source{
-		leakix.NewSource(),
-		shodan.NewSource(),
-		censys.NewSource(),
-		virustotal.NewSource(),
-		alienvault.NewSource(),
-		zoomeye.NewSource(),
-		abuseipdb.NewSource(),
-		threatbook.NewSource(),
-		ipinfo.NewSource(),
-	}
+        // Initialize sources (duplicated from main.go for now)
+        // ideally this should be shared, but keeping it simple for this task.
+        sources := []base.Source{
+                leakix.NewSource(),
+                shodan.NewSource(),
+                censys.NewSource(),
+                virustotal.NewSource(),
+                alienvault.NewSource(),
+                zoomeye.NewSource(),
+                abuseipdb.NewSource(),
+                threatbook.NewSource(),
+                ipinfo.NewSource(),
+        }
 
-	ctx := context.Background()
+        ctx := context.Background()
 
-	// Run Analysis
-	// We might want to stream logs to the user, but for now we'll just wait.
-	findings, err := core.Run(ctx, domain, sources)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Analysis failed: %v", err), http.StatusInternalServerError)
-		return
-	}
+        // Run Analysis
+        // We might want to stream logs to the user, but for now we'll just wait.
+        findings, err := core.Run(ctx, domain, sources)
+        if err != nil {
+                http.Error(w, fmt.Sprintf("Analysis failed: %v", err), http.StatusInternalServerError)
+                return
+        }
 
-	findings = normalize.Dedup(findings)
-	score := scoring.Aggregate(findings)
+        findings = normalize.Dedup(findings)
+        score := scoring.Aggregate(findings)
 
-	// AI Analysis using Per-Provider Aggregation
-	// Strategy: Group findings by source, analyze each group separately, and aggregate scores.
-	var aggregatedAnalysis *ai.AggregatedAnalysis
+        // AI Analysis using Per-Provider Aggregation
+        // Strategy: Group findings by source, analyze each group separately, and aggregate scores.
+        var aggregatedAnalysis *ai.AggregatedAnalysis
 
-	aiCfg := &config.CurrentScoringConfig.AI
-	if aiCfg.Enabled {
-		aggregatedAnalysis = &ai.AggregatedAnalysis{
-			Providers:  []ai.ProviderAnalysis{},
-			Timestamp:  time.Now().Format(time.RFC3339),
-			RiskLevel:  "Unknown",
-			FinalScore: 0.0,
-		}
+        aiCfg := &config.CurrentScoringConfig.AI
+        if aiCfg.Enabled {
+                aggregatedAnalysis = &ai.AggregatedAnalysis{
+                        Providers:  []ai.ProviderAnalysis{},
+                        Timestamp:  time.Now().Format(time.RFC3339),
+                        RiskLevel:  "Unknown",
+                        FinalScore: 0.0,
+                }
 
-		// Ensure API keys are loaded
-		switch aiCfg.Provider {
-		case "gemini":
-			aiCfg.APIKey = os.Getenv("GEMINI_API_KEY")
-		case "openai":
-			aiCfg.APIKey = os.Getenv("OPENAI_API_KEY")
-		case "groq":
-			aiCfg.APIKey = os.Getenv("GROQ_API_KEY")
-		}
+                // Ensure API keys are loaded
+                switch aiCfg.Provider {
+                case "gemini":
+                        aiCfg.APIKey = os.Getenv("GEMINI_API_KEY")
+                case "openai":
+                        aiCfg.APIKey = os.Getenv("OPENAI_API_KEY")
+                case "groq":
+                        aiCfg.APIKey = os.Getenv("GROQ_API_KEY")
+                }
 
-		aiClient, err := ai.NewAIClient(aiCfg)
-		if err == nil {
-			// 1. Group findings by source (e.g., "shodan", "leakix")
-			findingsBySource := make(map[string][]normalize.Finding)
-			for _, f := range findings {
-				findingsBySource[f.Source] = append(findingsBySource[f.Source], f)
-			}
+                aiClient, err := ai.NewAIClient(aiCfg)
+                if err == nil {
+                        // 1. Group findings by source (e.g., "shodan", "leakix")
+                        findingsBySource := make(map[string][]normalize.Finding)
+                        for _, f := range findings {
+                                findingsBySource[f.Source] = append(findingsBySource[f.Source], f)
+                        }
 
-			// 2. Analyze per source and calculate weighted contribution
-			// Rule: Each provider can contribute at most 20% (20 points) to the final score.
-			totalContribution := 0.0
+                        // 2. Analyze per source and calculate weighted contribution
+                        // Rule: Each provider can contribute at most 20% (20 points) to the final score.
+                        totalContribution := 0.0
 
-			for source, sourceFindings := range findingsBySource {
-				pAnalysis := ai.ProviderAnalysis{
-					Provider: source,
-				}
+                        for source, sourceFindings := range findingsBySource {
+                                pAnalysis := ai.ProviderAnalysis{
+                                        Provider: source,
+                                }
 
-				analysis, err := aiClient.AnalyzeFindings(ctx, domain, sourceFindings)
-				if err != nil {
-					pAnalysis.Error = err.Error()
-				} else {
-					pAnalysis.Analysis = analysis
-					// Calculate Contribution:
-					// AI returns score 0.0 - 10.0.
-					// We map this to 0 - 20 points (20% of 100).
-					// Formula: Score * 2.0
-					contrib := analysis.AggregatedRiskScore * 2.0
-					pAnalysis.Contribution = contrib
-					totalContribution += contrib
-				}
-				aggregatedAnalysis.Providers = append(aggregatedAnalysis.Providers, pAnalysis)
-			}
+                                analysis, err := aiClient.AnalyzeFindings(ctx, domain, sourceFindings)
+                                if err != nil {
+                                        pAnalysis.Error = err.Error()
+                                } else {
+                                        pAnalysis.Analysis = analysis
+                                        // Calculate Contribution:
+                                        // AI returns score 0.0 - 10.0.
+                                        // We map this to 0 - 20 points (20% of 100).
+                                        // Formula: Score * 2.0
+                                        contrib := analysis.AggregatedRiskScore * 2.0
+                                        pAnalysis.Contribution = contrib
+                                        totalContribution += contrib
+                                }
+                                aggregatedAnalysis.Providers = append(aggregatedAnalysis.Providers, pAnalysis)
+                        }
 
-			// 3. Final Score Calculation (Capped at 100)
-			if totalContribution > 100.0 {
-				totalContribution = 100.0
-			}
-			aggregatedAnalysis.FinalScore = totalContribution
-			aggregatedAnalysis.RiskLevel = aggregation.InterpretLevel(totalContribution)
+                        // 3. Final Score Calculation (Capped at 100)
+                        if totalContribution > 100.0 {
+                                totalContribution = 100.0
+                        }
+                        aggregatedAnalysis.FinalScore = totalContribution
+                        aggregatedAnalysis.RiskLevel = aggregation.InterpretLevel(totalContribution)
 
-			// 4. Generate Global Executive Summary
-			if len(aggregatedAnalysis.Providers) > 0 {
-				fmt.Printf("   > Generating Global Executive Summary for %s...\n", domain)
-				globalSummary, err := aiClient.GenerateGlobalSummary(ctx, domain, aggregatedAnalysis.Providers)
-				if err != nil {
-					fmt.Printf("     [!] Failed to generate global summary: %v\n", err)
-				} else {
-					aggregatedAnalysis.GlobalSummary = globalSummary.GlobalSummary
-					aggregatedAnalysis.GlobalImpact = globalSummary.GlobalImpact
-					aggregatedAnalysis.GlobalRemediation = globalSummary.GlobalRemediation
-				}
-			}
+                        // 4. Generate Global Executive Summary
+                        if len(aggregatedAnalysis.Providers) > 0 {
+                                fmt.Printf("   > Generating Global Executive Summary for %s...\n", domain)
+                                globalSummary, err := aiClient.GenerateGlobalSummary(ctx, domain, aggregatedAnalysis.Providers)
+                                if err != nil {
+                                        fmt.Printf("     [!] Failed to generate global summary: %v\n", err)
+                                } else {
+                                        aggregatedAnalysis.GlobalSummary = globalSummary.GlobalSummary
+                                        aggregatedAnalysis.GlobalImpact = globalSummary.GlobalImpact
+                                        aggregatedAnalysis.GlobalRemediation = globalSummary.GlobalRemediation
+                                }
+                        }
 
-		} else {
-			// Global init error, logging to stderr for operator visibility
-			fmt.Fprintf(os.Stderr, "Failed to init AI client: %v\n", err)
-		}
-	}
+                } else {
+                        // Global init error, logging to stderr for operator visibility
+                        fmt.Fprintf(os.Stderr, "Failed to init AI client: %v\n", err)
+                }
+        }
 
-	result := aggregation.Build(domain, score, findings)
-	result.AIAnalysis = aggregatedAnalysis
-	// Note: We do NOT overwrite result.Score with AI score anymore.
+        result := aggregation.Build(domain, score, findings)
+        result.AIAnalysis = aggregatedAnalysis
+        // Note: We do NOT overwrite result.Score with AI score anymore.
 
-	// Render Report
-	w.Header().Set("Content-Type", "text/html")
-	if err := report.Render(result, w); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to render report: %v", err), http.StatusInternalServerError)
-	}
+        // Render Report
+        w.Header().Set("Content-Type", "text/html")
+        if err := report.Render(result, w); err != nil {
+                http.Error(w, fmt.Sprintf("Failed to render report: %v", err), http.StatusInternalServerError)
+        }
 }
 
 // landingPageHTML is the new homepage with 2 menu options
@@ -492,7 +536,7 @@ const phishingPageHTML = `
             document.getElementById('result').classList.add('hidden');
 
             try {
-                const resp = await fetch('http://localhost:5000/predict', {
+                const resp = await fetch('/api/phishing/predict', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({url: url})

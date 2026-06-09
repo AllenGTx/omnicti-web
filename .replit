@@ -37,3 +37,8 @@ externalPort = 80
 [[ports]]
 localPort = 5001
 externalPort = 3000
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "start.sh"]
+build = ["bash", "-c", "go build -o domain-intel ./cmd/domain-intel/main.go"]

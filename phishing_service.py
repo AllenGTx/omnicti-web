@@ -195,10 +195,10 @@ Berikan analisis dalam format JSON MURNI (tanpa markdown, langsung JSON):
 
     try:
         payload = json.dumps({
-            "model": "mixtral-8x7b-32768",
+            "model": "llama-3.3-70b-versatile",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
-            "max_tokens": 1024
+            "max_tokens": 1500
         }).encode('utf-8')
 
         req = urllib.request.Request(

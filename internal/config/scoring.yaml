@@ -38,4 +38,4 @@ business_logic:
 ai:
   enabled: true
   provider: "gemini" # or "openai", "groq"
-  model: "gemini-flash-latest" # or "gpt-4o", "llama3-70b-8192"
+  model: "gemini-2.5-flash" # or "gpt-4o", "llama3-70b-8192"

@@ -39,6 +39,6 @@ localPort = 5001
 externalPort = 3000
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 run = ["bash", "start.sh"]
-build = ["bash", "-c", "go build -o domain-intel ./cmd/domain-intel/main.go"]
+build = ["bash", "-c", "go build -o domain-intel ./cmd/domain-intel/main.go && pip install -r requirements.txt"]

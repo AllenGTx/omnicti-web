@@ -213,8 +213,12 @@ def predict(url: str) -> dict:
         elif strong_count >= 1 and verdict == 'SAFE':
             verdict, level = 'SUSPICIOUS', 'warning'
 
-        # ── Display score (blended — cosmetic only, does NOT determine verdict)
-        final = min(100.0, round(m_score * 0.6 + h_score * 0.4, 1))
+        # ── Display score: gunakan heuristic langsung kalau ML uncertain,
+        # blend hanya kalau ML confident (proba ≥ 0.15)
+        if raw_proba >= 0.15:
+            final = min(100.0, round(m_score * 0.6 + h_score * 0.4, 1))
+        else:
+            final = min(100.0, float(h_score))   # heuristic = primary driver, tampilkan apa adanya
 
     else:
         # ── Heuristic-only mode (no ML models loaded)

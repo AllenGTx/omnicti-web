@@ -72,22 +72,22 @@ def heuristic_score(url: str):
         score += 35; reasons.append('Simbol @ ditemukan di URL — teknik penyamaran domain')
     if f['suspicious_tld']:
         score += 35; reasons.append('TLD mencurigakan (.tk/.ml/.xyz/dll) — sering dipakai phisher')
-    if f['phishing_keywords'] > 0:
-        pts = min(30, f['phishing_keywords'] * 10)
+    if f['phishing_keywords'] >= 2:
+        pts = min(25, (f['phishing_keywords'] - 1) * 7)
         score += pts; reasons.append(f"Ditemukan {f['phishing_keywords']} kata kunci phishing dalam URL")
-    if f['url_length'] > 75:
-        score += 15; reasons.append(f"URL terlalu panjang ({f['url_length']} karakter)")
-    if f['num_hyphens'] > 2:
-        score += 10; reasons.append(f"Banyak tanda hubung ({f['num_hyphens']}) — ciri domain palsu")
-    if f['num_dots'] > 4:
-        score += 10; reasons.append(f"Banyak titik dalam URL ({f['num_dots']}) — kemungkinan domain palsu")
-    if f['subdomain_count'] > 2:
-        score += 10; reasons.append(f"Banyak subdomain ({f['subdomain_count']}) — pola domain tiruan")
+    if f['url_length'] > 100:
+        score += 10; reasons.append(f"URL sangat panjang ({f['url_length']} karakter)")
+    if f['num_hyphens'] > 3:
+        score += 8; reasons.append(f"Banyak tanda hubung ({f['num_hyphens']}) — ciri domain palsu")
+    if f['num_dots'] > 5:
+        score += 8; reasons.append(f"Banyak titik dalam URL ({f['num_dots']}) — kemungkinan domain palsu")
+    if f['subdomain_count'] > 3:
+        score += 8; reasons.append(f"Banyak subdomain ({f['subdomain_count']}) — pola domain tiruan")
     if f['double_slash']:
         score += 10; reasons.append('Double slash di tengah URL — teknik redirect berbahaya')
     if not f['is_https']:
-        score += 8;  reasons.append('Tidak menggunakan HTTPS')
-    if f['num_params'] > 4:
+        score += 5;  reasons.append('Tidak menggunakan HTTPS')
+    if f['num_params'] > 5:
         score += 5;  reasons.append(f"Banyak parameter URL ({f['num_params']})")
     return min(100, score), reasons
 
@@ -101,7 +101,7 @@ def ml_score(url: str) -> float:
         vec = TFIDF.transform([url]).toarray()
         sc  = SCALER.transform(np.array([[f['url_length'], f['num_dots'], f['num_special']]]))
         proba = RF.predict_proba(np.hstack([vec, sc]))[0][1]
-        return min(100.0, round(proba * 300, 1))
+        return min(100.0, round(proba * 100, 1))
     except Exception:
         return 0.0
 
@@ -111,11 +111,19 @@ def predict(url: str) -> dict:
     m_score          = ml_score(url)
     f                = extract_features(url)
 
-    final = round((m_score * 0.4) + (h_score * 0.6), 1) if MODELS_LOADED else float(h_score)
+    final = round((m_score * 0.6) + (h_score * 0.4), 1) if MODELS_LOADED else float(h_score)
+
+    # Safety net: strong heuristic signals (suspicious TLD, IP in URL, @ symbol)
+    # cannot be completely nullified by ML false negatives
+    if h_score >= 75:
+        final = max(final, 65.0)   # Force at least PHISHING
+    elif h_score >= 50:
+        final = max(final, 35.0)   # Force at least SUSPICIOUS
+
     final = min(100.0, final)
 
-    if   final >= 35: verdict, level = 'PHISHING',   'danger'
-    elif final >= 15: verdict, level = 'SUSPICIOUS',  'warning'
+    if   final >= 65: verdict, level = 'PHISHING',   'danger'
+    elif final >= 35: verdict, level = 'SUSPICIOUS',  'warning'
     else:             verdict, level = 'SAFE',         'safe'
 
     return {

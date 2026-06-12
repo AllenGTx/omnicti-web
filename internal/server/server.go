@@ -783,8 +783,8 @@ const phishingPageHTML = `
             const suspTld = ['.tk','.ml','.ga','.cf','.xyz','.top'];
             if (suspTld.some(t => low.includes(t))) { score+=20; reasons.push('TLD mencurigakan'); }
             score = Math.min(100, score);
-            const verdict = score>=70?'PHISHING':score>=40?'SUSPICIOUS':'SAFE';
-            const level = score>=70?'danger':score>=40?'warning':'safe';
+            const verdict = score>=65?'PHISHING':score>=35?'SUSPICIOUS':'SAFE';
+            const level = score>=65?'danger':score>=35?'warning':'safe';
             return {url, score, verdict, level, reasons, features:{url_length:url.length, has_ip:/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(url), is_https:url.startsWith('https'), phishing_keywords:found.length, num_dots:(url.match(/\./g)||[]).length, suspicious_tld:suspTld.some(t=>low.includes(t)), num_hyphens:(url.match(/-/g)||[]).length, subdomain_count:0}, models_used:false};
         }
 

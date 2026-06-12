@@ -38,6 +38,60 @@ PHISHING_KEYWORDS = [
 ]
 SUSPICIOUS_TLDS = ['.tk','.ml','.ga','.cf','.gq','.xyz','.top','.click','.link','.ru','.cn','.pw']
 
+# Brand → official domains (subdomain of official = allowed)
+BRAND_DOMAINS = {
+    # Indonesian banks
+    'klikbca':   ['klikbca.com'],
+    'bca':       ['klikbca.com', 'bca.co.id', 'mybca.bca.co.id'],
+    'mandiri':   ['bankmandiri.co.id', 'mandiri.co.id', 'livinbymandiri.co.id'],
+    'livin':     ['bankmandiri.co.id', 'mandiri.co.id'],
+    'bni':       ['bni.co.id', 'bnidirect.bni.co.id'],
+    'bri':       ['bri.co.id', 'internet-banking.bri.co.id', 'briva.id'],
+    'brimo':     ['bri.co.id'],
+    'cimb':      ['cimbniaga.co.id', 'cimbniaga.com', 'octo.cimbniaga.co.id'],
+    'danamon':   ['danamon.co.id', 'danamon.com'],
+    'permata':   ['permatabank.com', 'permatamobile.com'],
+    'btpn':      ['btpn.com', 'jenius.com'],
+    'jenius':    ['jenius.com', 'btpn.com'],
+    # E-wallets / fintech
+    'gopay':     ['gojek.com', 'gopay.co.id'],
+    'ovo':       ['ovo.id'],
+    'dana':      ['dana.id'],
+    'linkaja':   ['linkaja.id'],
+    'flip':      ['flip.id'],
+    'bibit':     ['bibit.id'],
+    # Global fintech / payment
+    'paypal':    ['paypal.com'],
+    'visa':      ['visa.com', 'visa.co.id'],
+    'mastercard':['mastercard.com'],
+    # Big tech
+    'apple':     ['apple.com', 'icloud.com', 'appleid.apple.com'],
+    'icloud':    ['icloud.com', 'apple.com'],
+    'google':    ['google.com', 'gmail.com', 'youtube.com', 'google.co.id'],
+    'gmail':     ['gmail.com', 'google.com'],
+    'microsoft': ['microsoft.com', 'live.com', 'outlook.com', 'hotmail.com', 'office.com', 'office365.com'],
+    'amazon':    ['amazon.com', 'amazon.co.id', 'amazonaws.com'],
+    'netflix':   ['netflix.com'],
+    'facebook':  ['facebook.com', 'fb.com', 'messenger.com'],
+    'instagram': ['instagram.com'],
+    'whatsapp':  ['whatsapp.com', 'wa.me'],
+    'tiktok':    ['tiktok.com'],
+    # Indonesian e-commerce / services
+    'tokopedia': ['tokopedia.com'],
+    'shopee':    ['shopee.co.id', 'shopee.com'],
+    'gojek':     ['gojek.com', 'goto.id'],
+    'grab':      ['grab.com', 'grab.co.id'],
+    'traveloka': ['traveloka.com'],
+    'bukalapak': ['bukalapak.com'],
+    'lazada':    ['lazada.co.id', 'lazada.com'],
+    'blibli':    ['blibli.com'],
+    'tiket':     ['tiket.com'],
+    'telkomsel': ['telkomsel.com', 'mytelkomsel.com'],
+    'indosat':   ['indosatooredoo.com', 'ioh.co.id'],
+    'pertamina': ['pertamina.com', 'mypertamina.id'],
+    'mypertamina':['mypertamina.id', 'pertamina.com'],
+}
+
 # ── Feature Extraction ────────────────────────────────────────────────────────
 def extract_features(url: str) -> dict:
     low = url.lower()
@@ -89,6 +143,28 @@ def heuristic_score(url: str):
         score += 5;  reasons.append('Tidak menggunakan HTTPS')
     if f['num_params'] > 5:
         score += 5;  reasons.append(f"Banyak parameter URL ({f['num_params']})")
+
+    # ── Brand impersonation / typosquatting check ──────────────────────────────
+    # Detects: klik-bca-indonesia.com, klikbcaa.com, mandiri-login.net, dll
+    try:
+        parsed_bd = urlparse(url if '://' in url else 'http://' + url)
+        raw_domain = re.sub(r'^www\.', '', parsed_bd.netloc.lower()).split(':')[0]
+        for brand, official_list in BRAND_DOMAINS.items():
+            if brand in raw_domain:
+                is_official = any(
+                    raw_domain == od or raw_domain.endswith('.' + od)
+                    for od in official_list
+                )
+                if not is_official:
+                    score += 55
+                    reasons.append(
+                        f'Brand impersonation: nama "{brand}" ada di domain tidak resmi '
+                        f'(domain resmi: {", ".join(official_list[:2])})'
+                    )
+                    break   # satu brand sudah cukup
+    except Exception:
+        pass
+
     return min(100, score), reasons
 
 # ── ML Scorer ─────────────────────────────────────────────────────────────────

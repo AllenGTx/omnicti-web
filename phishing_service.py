@@ -92,39 +92,60 @@ def heuristic_score(url: str):
     return min(100, score), reasons
 
 # ── ML Scorer ─────────────────────────────────────────────────────────────────
-def ml_score(url: str) -> float:
+def ml_score(url: str):
+    """Returns (display_score_0_100, raw_probability_0_1)"""
     if not MODELS_LOADED:
-        return 0.0
+        return 0.0, 0.0
     try:
         import numpy as np
-        f   = extract_features(url)
-        vec = TFIDF.transform([url]).toarray()
-        sc  = SCALER.transform(np.array([[f['url_length'], f['num_dots'], f['num_special']]]))
+        f     = extract_features(url)
+        vec   = TFIDF.transform([url]).toarray()
+        sc    = SCALER.transform(np.array([[f['url_length'], f['num_dots'], f['num_special']]]))
         proba = RF.predict_proba(np.hstack([vec, sc]))[0][1]
-        return min(100.0, round(proba * 100, 1))
+        return min(100.0, round(proba * 100, 1)), float(proba)
     except Exception:
-        return 0.0
+        return 0.0, 0.0
 
 # ── Main Predict ──────────────────────────────────────────────────────────────
 def predict(url: str) -> dict:
     h_score, reasons = heuristic_score(url)
-    m_score          = ml_score(url)
-    f                = extract_features(url)
+    m_score, raw_proba = ml_score(url)
+    f = extract_features(url)
 
-    final = round((m_score * 0.6) + (h_score * 0.4), 1) if MODELS_LOADED else float(h_score)
+    if MODELS_LOADED:
+        # ── ML confidence zones
+        # raw_proba for this model clusters near 5-6% for out-of-distribution URLs.
+        # Only trust ML when it is clearly HIGH (trained pattern recognized).
+        if raw_proba >= 0.60:
+            # ML very confident → PHISHING (training distribution hit)
+            verdict, level = 'PHISHING', 'danger'
+        elif raw_proba >= 0.15:
+            # ML moderately confident → at least SUSPICIOUS
+            verdict, level = 'SUSPICIOUS', 'warning'
+        else:
+            # ML uncertain / out-of-distribution → rely on heuristic
+            if   h_score >= 55: verdict, level = 'PHISHING',  'danger'
+            elif h_score >= 30: verdict, level = 'SUSPICIOUS', 'warning'
+            else:               verdict, level = 'SAFE',        'safe'
 
-    # Safety net: strong heuristic signals (suspicious TLD, IP in URL, @ symbol)
-    # cannot be completely nullified by ML false negatives
-    if h_score >= 75:
-        final = max(final, 65.0)   # Force at least PHISHING
-    elif h_score >= 50:
-        final = max(final, 35.0)   # Force at least SUSPICIOUS
+        # ── Safety upgrade: strong structural signals override to at minimum SUSPICIOUS
+        # These are near-universal phishing indicators regardless of ML confidence.
+        strong = (f['has_ip'], f['num_at'] > 0, f['suspicious_tld'])
+        strong_count = sum(strong)
+        if strong_count >= 2 and verdict == 'SAFE':
+            verdict, level = 'PHISHING', 'danger'
+        elif strong_count >= 1 and verdict == 'SAFE':
+            verdict, level = 'SUSPICIOUS', 'warning'
 
-    final = min(100.0, final)
+        # ── Display score (blended — cosmetic only, does NOT determine verdict)
+        final = min(100.0, round(m_score * 0.6 + h_score * 0.4, 1))
 
-    if   final >= 65: verdict, level = 'PHISHING',   'danger'
-    elif final >= 35: verdict, level = 'SUSPICIOUS',  'warning'
-    else:             verdict, level = 'SAFE',         'safe'
+    else:
+        # ── Heuristic-only mode (no ML models loaded)
+        final = min(100.0, float(h_score))
+        if   final >= 55: verdict, level = 'PHISHING',  'danger'
+        elif final >= 30: verdict, level = 'SUSPICIOUS', 'warning'
+        else:             verdict, level = 'SAFE',        'safe'
 
     return {
         'url'             : url,

@@ -7,6 +7,7 @@ import (
         "fmt"
         "io"
         "net/http"
+        "os"
         "strings"
         "time"
 
@@ -131,7 +132,29 @@ func (c *client) callGeminiREST(ctx context.Context, prompt string) (string, err
 func (c *client) callLLM(ctx context.Context, prompt string) (string, error) {
         switch c.cfg.Provider {
         case "gemini":
-                return c.callGeminiREST(ctx, prompt)
+                resp, err := c.callGeminiREST(ctx, prompt)
+                if err != nil {
+                        groqKey := os.Getenv("GROQ_API_KEY")
+                        if groqKey != "" {
+                                fmt.Printf("[!] Gemini API failed (%v), falling back to Groq...\n", err)
+                                groqCfg := openai.DefaultConfig(groqKey)
+                                groqCfg.BaseURL = "https://api.groq.com/openai/v1"
+                                groqClient := openai.NewClientWithConfig(groqCfg)
+                                
+                                groqResp, groqErr := groqClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+                                        Model: "llama-3.3-70b-versatile",
+                                        Messages: []openai.ChatCompletionMessage{
+                                                {Role: openai.ChatMessageRoleUser, Content: prompt},
+                                        },
+                                })
+                                if groqErr == nil && len(groqResp.Choices) > 0 {
+                                        return groqResp.Choices[0].Message.Content, nil
+                                }
+                                fmt.Printf("[!] Groq fallback also failed: %v\n", groqErr)
+                        }
+                        return "", err
+                }
+                return resp, nil
         case "openai", "groq":
                 resp, err := c.openaiClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
                         Model: c.cfg.Model,

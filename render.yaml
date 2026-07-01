@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: omnicti-domain
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: "8080"
+      # CTI Source API Keys - set these in Render dashboard
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SHODAN_KEY
+        sync: false
+      - key: VIRUSTOTAL_KEY
+        sync: false
+      - key: CENSYS_API_ID
+        sync: false
+      - key: CENSYS_API_SECRET
+        sync: false
+      - key: OTX_KEY
+        sync: false
+      - key: ABUSEIPDB_KEY
+        sync: false
+      - key: LEAKIX_KEY
+        sync: false
+      - key: IPINFO_KEY
+        sync: false
+      - key: ZOOMEYE_KEY
+        sync: false
+      - key: THREATBOOK_KEY
+        sync: false

@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "buildCommand": "pip install -r requirements.txt",
+  "rewrites": [
+    { "source": "/api/phishing/predict", "destination": "/api/predict" },
+    { "source": "/api/phishing/analyze", "destination": "/api/analyze" },
+    { "source": "/phishing", "destination": "/public/phishing.html" },
+    { "source": "/", "destination": "/public/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+      ]
+    }
+  ],
+  "functions": {
+    "api/predict.py": {
+      "maxDuration": 30
+    },
+    "api/analyze.py": {
+      "maxDuration": 60
+    }
+  }
+}

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCTI - Cyber Security Suite</title>
+    <meta name="description" content="OmniCTI Security Suite — Phishing URL Detector berbasis Machine Learning & Domain Security Intelligence untuk keamanan siber.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-6px); box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #6366f1; animation: spin 1s ease infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.6s ease forwards; }
+        .glow-indigo { box-shadow: 0 0 30px rgba(99,102,241,0.15); }
+        .glow-rose { box-shadow: 0 0 30px rgba(244,63,94,0.15); }
+        .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; border-radius: 9999px; padding: 3px 10px; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center relative overflow-hidden">
+    <!-- Animated Background -->
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div class="absolute w-[700px] h-[700px] bg-purple-600/15 rounded-full blur-[140px] -top-40 -left-40 animate-pulse"></div>
+        <div class="absolute w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-[120px] bottom-0 right-0 animate-pulse" style="animation-delay:1s"></div>
+        <div class="absolute w-[400px] h-[400px] bg-cyan-600/8 rounded-full blur-[100px] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <!-- Grid pattern -->
+        <div class="absolute inset-0 opacity-[0.02]" style="background-image: linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    </div>
+
+    <div class="w-full max-w-2xl px-6 py-14 fade-in">
+        <!-- Header -->
+        <div class="text-center mb-14">
+            <div class="flex items-center justify-center space-x-3 mb-5">
+                <div class="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                    <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400">OmniCTI</h1>
+            </div>
+            <p class="text-slate-400 text-base font-medium">Cyber Threat Intelligence & Security Analysis Suite</p>
+            <div class="flex items-center justify-center gap-2 mt-3">
+                <span class="badge bg-green-500/10 text-green-400 border border-green-500/20">● Live</span>
+                <span class="badge bg-slate-700/50 text-slate-400 border border-slate-600/30">v2.0</span>
+            </div>
+        </div>
+
+        <!-- Menu Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <!-- Card 1: Phishing Detector -->
+            <a href="/phishing" id="phishing-card" class="card-hover glow-rose bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-7 block no-underline group">
+                <div class="flex items-center space-x-4 mb-5">
+                    <div class="w-12 h-12 bg-rose-500/20 rounded-xl flex items-center justify-center border border-rose-500/20 group-hover:bg-rose-500/30 transition-colors">
+                        <svg class="w-6 h-6 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Phishing Detector</h2>
+                        <p class="text-xs text-rose-400 font-medium mt-0.5">ML-Based Detection</p>
+                    </div>
+                </div>
+                <p class="text-slate-400 text-sm leading-relaxed mb-5">Deteksi URL phishing menggunakan Machine Learning (TF-IDF + Random Forest) dan analisis heuristik berbasis 50+ brand pattern.</p>
+                <div class="flex flex-wrap gap-2">
+                    <span class="badge bg-rose-500/10 text-rose-300 border border-rose-500/20">ML Detection</span>
+                    <span class="badge bg-orange-500/10 text-orange-300 border border-orange-500/20">TF-IDF</span>
+                    <span class="badge bg-slate-700/50 text-slate-300 border border-slate-600/30">Brand Check</span>
+                </div>
+                <div class="mt-5 flex items-center text-rose-400 text-sm font-medium group-hover:gap-2 transition-all">
+                    <span>Mulai deteksi</span>
+                    <svg class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </div>
+            </a>
+
+            <!-- Card 2: Domain Security Checker -->
+            <div id="domain-card" class="card-hover glow-indigo bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-7 cursor-pointer group" onclick="openDomainChecker()">
+                <div class="flex items-center space-x-4 mb-5">
+                    <div class="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/30 transition-colors">
+                        <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Domain Security Checker</h2>
+                        <p class="text-xs text-indigo-400 font-medium mt-0.5">Powered by OmniCTI</p>
+                    </div>
+                </div>
+                <p class="text-slate-400 text-sm leading-relaxed mb-5">Analisis keamanan domain secara menyeluruh menggunakan 9 sumber CTI (Shodan, VirusTotal, Censys, dll) dengan AI Risk Assessment.</p>
+                <div class="flex flex-wrap gap-2">
+                    <span class="badge bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">9 CTI Sources</span>
+                    <span class="badge bg-purple-500/10 text-purple-300 border border-purple-500/20">AI Powered</span>
+                    <span class="badge bg-slate-700/50 text-slate-300 border border-slate-600/30">Risk Scoring</span>
+                </div>
+                <div class="mt-5 flex items-center text-indigo-400 text-sm font-medium group-hover:gap-2 transition-all">
+                    <span>Mulai analisis</span>
+                    <svg class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Domain Form (hidden by default) -->
+        <div id="domainFormWrapper" class="hidden mt-8 fade-in">
+            <div class="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-7">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-lg font-bold text-white">Domain Security Checker</h3>
+                        <p class="text-xs text-slate-500 mt-0.5">Powered by OmniCTI Engine</p>
+                    </div>
+                    <button onclick="hideDomainForm()" class="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700/50">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Warm-up notice -->
+                <div id="warmupNotice" class="hidden mb-4 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 flex items-start gap-3">
+                    <svg class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <p class="text-xs text-amber-300">Server sedang warm-up setelah idle. Proses pertama mungkin membutuhkan 30-60 detik. Harap tunggu...</p>
+                </div>
+
+                <form id="scanForm" class="space-y-4" onsubmit="submitDomainScan(event)">
+                    <div>
+                        <label for="domainInput" class="block text-sm font-medium text-slate-300 mb-2">Target Domain</label>
+                        <div class="relative">
+                            <input type="text" name="domain" id="domainInput" placeholder="example.com" required
+                                class="w-full bg-slate-900/50 border border-slate-700 text-white text-sm rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent block w-full p-3 pl-10 placeholder-slate-600 transition duration-200">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s1.343-9 3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" id="submitBtn"
+                        class="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-all duration-200 transform hover:scale-[1.02]">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        Start Analysis
+                    </button>
+                </form>
+                <div id="domainLoading" class="hidden mt-6">
+                    <div class="flex flex-col items-center space-y-3">
+                        <div class="spinner"></div>
+                        <p id="domainLoadingMsg" class="text-slate-300 text-sm animate-pulse text-center">Menghubungi server analisis...</p>
+                        <p class="text-xs text-slate-500">Analisis membutuhkan waktu 30-90 detik</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-center text-slate-600 text-xs mt-10">OmniCTI Security Suite &mdash; For authorized security research only</p>
+    </div>
+
+    <script>
+        // ── Config ──────────────────────────────────────────────────────────
+        // GANTI URL ini setelah deploy ke Render!
+        const DOMAIN_CHECKER_URL = window.DOMAIN_CHECKER_URL || 'https://omnicti-domain.onrender.com';
+
+        // ── Utility ─────────────────────────────────────────────────────────
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        function openDomainChecker() {
+            const wrapper = document.getElementById('domainFormWrapper');
+            wrapper.classList.remove('hidden');
+            wrapper.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => document.getElementById('domainInput').focus(), 400);
+        }
+
+        function hideDomainForm() {
+            document.getElementById('domainFormWrapper').classList.add('hidden');
+        }
+
+        // ── Auto-retry fetch (handles Render cold start) ─────────────────────
+        async function fetchWithRetry(url, options, maxRetries = 4) {
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 90000); // 90s timeout
+                    const resp = await fetch(url, { ...options, signal: controller.signal });
+                    clearTimeout(timeout);
+
+                    if (resp.status === 503 || resp.status === 502 || resp.status === 429) {
+                        if (attempt < maxRetries) {
+                            const wait = attempt * 2000;
+                            updateDomainMsg(`Server sibuk, mencoba ulang dalam ${wait/1000}s (${attempt}/${maxRetries})...`);
+                            if (attempt >= 2) document.getElementById('warmupNotice').classList.remove('hidden');
+                            await sleep(wait);
+                            continue;
+                        }
+                    }
+                    return resp;
+                } catch (e) {
+                    if (e.name === 'AbortError') {
+                        if (attempt < maxRetries) {
+                            updateDomainMsg(`Timeout, mencoba ulang (${attempt}/${maxRetries})...`);
+                            document.getElementById('warmupNotice').classList.remove('hidden');
+                            await sleep(attempt * 2000);
+                            continue;
+                        }
+                        throw new Error('Request timeout setelah beberapa percobaan');
+                    }
+                    if (attempt === maxRetries) throw e;
+                    updateDomainMsg(`Koneksi gagal, mencoba ulang (${attempt}/${maxRetries})...`);
+                    await sleep(attempt * 2000);
+                }
+            }
+        }
+
+        function updateDomainMsg(msg) {
+            document.getElementById('domainLoadingMsg').textContent = msg;
+        }
+
+        // ── Domain Scan Submit ────────────────────────────────────────────────
+        async function submitDomainScan(e) {
+            e.preventDefault();
+            const domain = document.getElementById('domainInput').value.trim();
+            if (!domain) return;
+
+            const btn = document.getElementById('submitBtn');
+            const loading = document.getElementById('domainLoading');
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            loading.classList.remove('hidden');
+            updateDomainMsg('Menghubungi server analisis...');
+
+            try {
+                const resp = await fetchWithRetry(`${DOMAIN_CHECKER_URL}/scan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `domain=${encodeURIComponent(domain)}`
+                });
+
+                if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+
+                // Server returns HTML report — redirect or open in new tab
+                const html = await resp.text();
+                const win = window.open('', '_blank');
+                win.document.write(html);
+                win.document.close();
+            } catch (err) {
+                alert(`Gagal menghubungi Domain Checker: ${err.message}\n\nPastikan server Render sudah berjalan.`);
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                loading.classList.add('hidden');
+                document.getElementById('warmupNotice').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

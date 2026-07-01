@@ -1,0 +1,51 @@
+# ── Binaries & Build Output ──────────────────────────────────────────────────
+domain-intel
+domain-intel.exe
+*.exe
+*.out
+
+# ── Go ───────────────────────────────────────────────────────────────────────
+# Keep go.mod and go.sum (needed for build)
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/
+env/
+uv.lock
+
+# ── Environment Variables ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Replit-specific ───────────────────────────────────────────────────────────
+.replit
+replit.nix
+replit.md
+.local/
+.config/
+.upm/
+
+# ── OS & IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ── Archives ──────────────────────────────────────────────────────────────────
+*.zip
+zipFile.zip
+omnicti_extracted/
+attached_assets/
+
+# ── NOTE: ML model files (.joblib) ARE included in git ───────────────────────
+# They are needed by Vercel Python serverless functions.
+# Total size: ~32MB (within Vercel's 250MB limit)
+# RandomForest_Phishing.joblib
+# tfidf_phishing.joblib
+# scaler_phishing.joblib

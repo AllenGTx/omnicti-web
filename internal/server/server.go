@@ -34,16 +34,32 @@ import (
 
 var phishingHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Start initializes and runs the HTTP server on the specified address.
 func Start(addr string) error {
-        http.HandleFunc("/", handleIndex)
-        http.HandleFunc("/scan", handleScan)
-        http.HandleFunc("/phishing", handlePhishing)
-        http.HandleFunc("/api/phishing/predict", handlePhishingPredict)
-        http.HandleFunc("/api/phishing/analyze", handlePhishingAnalyze)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleIndex)
+	mux.HandleFunc("/scan", handleScan)
+	mux.HandleFunc("/phishing", handlePhishing)
+	mux.HandleFunc("/api/phishing/predict", handlePhishingPredict)
+	mux.HandleFunc("/api/phishing/analyze", handlePhishingAnalyze)
 
-        fmt.Printf("[*] Web Server listening on %s\n", addr)
-        return http.ListenAndServe(addr, nil)
+	handler := corsMiddleware(mux)
+
+	fmt.Printf("[*] Web Server listening on %s\n", addr)
+	return http.ListenAndServe(addr, handler)
 }
 
 // handlePhishingPredict proxies POST /api/phishing/predict → Python service :5001/predict

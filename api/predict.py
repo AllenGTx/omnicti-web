@@ -40,7 +40,32 @@ PHISHING_KEYWORDS = [
     'password','credential','unusual','click','limited','urgent','free','prize',
     'winner','reward','bonus','wallet','invoice','alert','notification','reset',
 ]
-SUSPICIOUS_TLDS = ['.tk','.ml','.ga','.cf','.gq','.xyz','.top','.click','.link','.ru','.cn','.pw']
+SUSPICIOUS_TLDS = [
+    '.tk','.ml','.ga','.cf','.gq','.xyz','.top','.click','.link',
+    '.ru','.cn','.pw','.cc','.ws','.biz','.info','.mobi','.name',
+    '.site','.online','.store','.club','.vip','.win','.loan','.work',
+    '.party','.racing','.stream','.download','.gdn','.icu','.buzz',
+]
+
+# URL shorteners — destination unknown = suspicious
+URL_SHORTENERS = [
+    'bit.ly','tinyurl.com','t.co','goo.gl','ow.ly','buff.ly',
+    'is.gd','cli.gs','pic.gd','short.to','tiny.cc','lnkd.in',
+    'db.tt','qr.ae','adf.ly','bitly.com','shorte.st','s.id',
+    'rb.gy','cutt.ly','shorturl.at','go2l.ink','x.gd','v.gd',
+]
+
+# Platforms abused for phishing pages
+PHISHING_PLATFORMS = [
+    'docs.google.com','forms.gle','forms.google.com',
+    'sites.google.com','notion.so','trello.com',
+    'github.io','netlify.app','vercel.app','web.app',
+    'firebaseapp.com','glitch.me','replit.app',
+    'sharepoint.com','1drv.ms','onedrive.live.com',
+]
+
+# Open redirect parameters
+OPEN_REDIRECT_PARAMS = ['url','redirect','redirect_url','next','goto','return','returnurl','target','dest','destination','link','rurl','r','forward','continue','back','go']
 
 BRAND_DOMAINS = {
     'klikbca':   ['klikbca.com'],
@@ -129,8 +154,12 @@ def heuristic_score(url: str):
         score += pts; reasons.append(f"Ditemukan {f['phishing_keywords']} kata kunci phishing dalam URL")
     if f['url_length'] > 100:
         score += 10; reasons.append(f"URL sangat panjang ({f['url_length']} karakter)")
+    elif f['url_length'] > 75:
+        score += 5
     if f['num_hyphens'] > 3:
         score += 8; reasons.append(f"Banyak tanda hubung ({f['num_hyphens']}) — ciri domain palsu")
+    elif f['num_hyphens'] > 1:
+        score += 3
     if f['num_dots'] > 5:
         score += 8; reasons.append(f"Banyak titik dalam URL ({f['num_dots']}) — kemungkinan domain palsu")
     if f['subdomain_count'] > 3:
@@ -249,6 +278,89 @@ def heuristic_score(url: str):
                         f'(beda {dist} karakter) — kemungkinan domain jebakan'
                     )
                     break
+    except Exception:
+        pass
+
+    # ── URL Shortener Detection ────────────────────────────────────────────────
+    try:
+        parsed_sh = urlparse(url if '://' in url else 'http://' + url)
+        sh_netloc = parsed_sh.netloc.lower().split(':')[0].replace('www.','')
+        if any(sh_netloc == s or sh_netloc.endswith('.'+s) for s in URL_SHORTENERS):
+            score += 30
+            reasons.append(
+                f'URL shortener terdeteksi ({sh_netloc}) — tujuan asli URL tersembunyi, '
+                'berbahaya karena bisa menyembunyikan link phishing'
+            )
+    except Exception:
+        pass
+
+    # ── Open Redirect Detection ───────────────────────────────────────────────
+    try:
+        parsed_or = urlparse(url if '://' in url else 'http://' + url)
+        qs = parse_qs(parsed_or.query)
+        for param in OPEN_REDIRECT_PARAMS:
+            if param in qs:
+                target = qs[param][0].lower()
+                # If redirect target looks like an external URL
+                if target.startswith('http') or target.startswith('//'):
+                    score += 45
+                    reasons.append(
+                        f'Open redirect terdeteksi: parameter "{param}" mengarah ke URL eksternal '
+                        '— teknik phishing untuk menyamarkan domain berbahaya di balik domain resmi'
+                    )
+                    break
+    except Exception:
+        pass
+
+    # ── Brand in PATH (not domain) Detection ─────────────────────────────────
+    try:
+        parsed_path = urlparse(url if '://' in url else 'http://' + url)
+        path_low = parsed_path.path.lower()
+        netloc_low = re.sub(r'^www\.', '', parsed_path.netloc.lower().split(':')[0])
+        for brand, official_list in BRAND_DOMAINS.items():
+            # Brand appears in PATH but NOT in domain at all
+            if brand in path_low and brand not in netloc_low:
+                # And domain is NOT official for that brand
+                is_official_domain = any(
+                    netloc_low == od or netloc_low.endswith('.' + od)
+                    for od in official_list
+                )
+                if not is_official_domain:
+                    score += 35
+                    reasons.append(
+                        f'Brand "{brand}" ditemukan di path URL pada domain tidak resmi '
+                        f'— teknik phishing yang menyembunyikan domain berbahaya'
+                    )
+                    break
+    except Exception:
+        pass
+
+    # ── Phishing Platform Abuse Detection ────────────────────────────────────
+    try:
+        parsed_pp = urlparse(url if '://' in url else 'http://' + url)
+        pp_netloc = parsed_pp.netloc.lower().split(':')[0]
+        pp_path   = parsed_pp.path.lower()
+        is_phishing_platform = any(
+            pp_netloc == p or pp_netloc.endswith('.'+p)
+            for p in PHISHING_PLATFORMS
+        )
+        if is_phishing_platform:
+            # Check if path contains brand name or phishing keywords
+            brand_in_path = any(b in pp_path for b in BRAND_DOMAINS)
+            kw_in_path = sum(1 for k in PHISHING_KEYWORDS if k in pp_path)
+            if brand_in_path or kw_in_path >= 2:
+                score += 50
+                reasons.append(
+                    f'Halaman phishing di platform publik ({pp_netloc}) — '
+                    'penyerang sering menyalahgunakan platform gratis (Google Forms, Notion, GitHub Pages, dll) '
+                    'untuk membuat halaman phishing yang tampak resmi'
+                )
+            elif is_phishing_platform:
+                score += 15
+                reasons.append(
+                    f'URL menggunakan platform hosting publik ({pp_netloc}) — '
+                    'verifikasi keaslian halaman sebelum memasukkan data'
+                )
     except Exception:
         pass
 

@@ -143,6 +143,9 @@ func (c *client) callLLM(ctx context.Context, prompt string) (string, error) {
                                 
                                 groqResp, groqErr := groqClient.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
                                         Model: "llama-3.3-70b-versatile",
+                                        ResponseFormat: &openai.ChatCompletionResponseFormat{
+                                                Type: openai.ChatCompletionResponseFormatTypeJSONObject,
+                                        },
                                         Messages: []openai.ChatCompletionMessage{
                                                 {Role: openai.ChatMessageRoleUser, Content: prompt},
                                         },
@@ -150,7 +153,7 @@ func (c *client) callLLM(ctx context.Context, prompt string) (string, error) {
                                 if groqErr == nil && len(groqResp.Choices) > 0 {
                                         return groqResp.Choices[0].Message.Content, nil
                                 }
-                                fmt.Printf("[!] Groq fallback also failed: %v\n", groqErr)
+                                return "", fmt.Errorf("Gemini failed (%v) AND Groq fallback failed: %v", err, groqErr)
                         }
                         return "", err
                 }

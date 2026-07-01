@@ -13,6 +13,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o domain-intel ./cmd/dom
 # ── Stage 2: Final image with Go binary + Python ──────────────────────────────
 FROM python:3.11-slim
 
+# Create a non-root user for Hugging Face security guidelines
+RUN useradd -m -u 1000 user
 WORKDIR /app
 
 # Install Python dependencies
@@ -30,10 +32,16 @@ COPY tfidf_phishing.joblib .
 COPY scaler_phishing.joblib .
 COPY internal/config/scoring.yaml ./internal/config/scoring.yaml
 
-# Startup script: launch Python service (bg) then Go server
+# Startup script
 COPY docker-start.sh .
 RUN chmod +x docker-start.sh
 
-EXPOSE 8080
+# Change ownership to non-root user
+RUN chown -R user:user /app
+USER user
+
+# Hugging Face uses port 7860 by default
+EXPOSE 7860
+ENV PORT=7860
 
 CMD ["./docker-start.sh"]

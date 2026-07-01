@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCTI - Phishing Detector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 28px; height: 28px; border-radius: 50%; border-left-color: #f43f5e; animation: spin 1s ease infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .score-bar { transition: width 1s ease-in-out; }
+        .pulse-danger { animation: pulseDanger 2s infinite; }
+        @keyframes pulseDanger { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } }
+        .pulse-warning { animation: pulseWarning 2s infinite; }
+        @keyframes pulseWarning { 0%,100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.4); } 50% { box-shadow: 0 0 0 10px rgba(234,179,8,0); } }
+    </style>
+</head>
+<body class="min-h-screen relative">
+    <!-- Background -->
+    <div class="fixed top-0 left-0 w-full h-full -z-10">
+        <div class="absolute w-[500px] h-[500px] bg-rose-600/15 rounded-full blur-[100px] -top-20 -right-20"></div>
+        <div class="absolute w-[500px] h-[500px] bg-purple-600/15 rounded-full blur-[100px] bottom-0 left-0"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="bg-slate-900/80 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-md">
+        <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <!-- Back Button -->
+                <a href="index.html" class="flex items-center space-x-2 text-slate-400 hover:text-white transition-colors mr-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span class="text-sm font-medium">Back</span>
+                </a>
+                <div class="w-px h-6 bg-slate-700"></div>
+                <svg class="w-7 h-7 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <h1 class="text-lg font-bold text-white">Phishing Detector</h1>
+            </div>
+            <span class="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-full px-3 py-1">ML-Based</span>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-10">
+
+        <!-- Input Form -->
+        <div class="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-7 mb-8">
+            <h2 class="text-base font-semibold text-slate-200 mb-1">Masukkan URL untuk Diperiksa</h2>
+            <p class="text-sm text-slate-500 mb-5">Contoh: http://paypal-login.suspicious.com/verify atau https://google.com</p>
+            <div class="flex gap-3">
+                <div class="relative flex-1">
+                    <input type="text" id="urlInput" placeholder="https://example.com/page?id=123"
+                        class="w-full bg-slate-900/60 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-transparent p-3 pl-10 placeholder-slate-600 transition duration-200 text-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                    </div>
+                </div>
+                <button onclick="checkPhishing()" id="checkBtn"
+                    class="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-xl transition-all duration-200 transform hover:scale-[1.02] text-sm whitespace-nowrap">
+                    Cek URL
+                </button>
+            </div>
+            <!-- Loading -->
+            <div id="loadingState" class="hidden mt-5 flex items-center space-x-3">
+                <div class="spinner"></div>
+                <span class="text-sm text-slate-400 animate-pulse">Menganalisis URL...</span>
+            </div>
+        </div>
+
+        <!-- Result -->
+        <div id="result" class="hidden">
+
+            <!-- Verdict Banner -->
+            <div id="verdictBanner" class="rounded-2xl p-6 mb-6 border">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div id="verdictIcon" class="w-14 h-14 rounded-full flex items-center justify-center text-2xl"></div>
+                        <div>
+                            <p class="text-sm text-slate-400 mb-1">Hasil Analisis</p>
+                            <p id="verdictText" class="text-2xl font-bold"></p>
+                            <p id="verdictUrl" class="text-xs text-slate-500 mt-1 font-mono break-all"></p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-slate-500 mb-1">Risk Score</p>
+                        <p id="scoreText" class="text-4xl font-bold"></p>
+                        <p class="text-xs text-slate-500">/100</p>
+                    </div>
+                </div>
+
+                <!-- Score Bar -->
+                <div class="mt-5">
+                    <div class="w-full bg-slate-700/50 rounded-full h-2.5">
+                        <div id="scoreBar" class="score-bar h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                <!-- Reasons -->
+                <div class="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span>Alasan Deteksi</span>
+                    </h3>
+                    <ul id="reasonsList" class="space-y-2"></ul>
+                    <p id="noReasons" class="hidden text-sm text-slate-500 italic">Tidak ada indikator mencurigakan</p>
+                </div>
+
+                <!-- Features -->
+                <div class="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-5">
+                    <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span>Analisis Fitur URL</span>
+                    </h3>
+                    <div id="featuresList" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Check Another -->
+            <div class="mt-6 text-center">
+                <button onclick="resetForm()" class="text-sm text-slate-400 hover:text-white transition-colors underline">
+                    Cek URL lain
+                </button>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="mt-8 bg-slate-800/30 border border-slate-700/30 rounded-xl p-5">
+            <h3 class="text-sm font-semibold text-slate-400 mb-3">ℹ️ Cara Kerja Phishing Detector</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs text-slate-500">
+                <div><span class="text-slate-300 font-medium block mb-1">🤖 TF-IDF Analysis</span>Menganalisis pola teks URL menggunakan model yang dilatih dari ribuan URL phishing</div>
+                <div><span class="text-slate-300 font-medium block mb-1">🌲 Random Forest</span>100 decision trees menentukan probabilitas phishing berdasarkan fitur URL</div>
+                <div><span class="text-slate-300 font-medium block mb-1">🔍 Heuristic Rules</span>Mengecek indikator mencurigakan: IP di URL, karakter @, TLD berbahaya, keyword phishing</div>
+                <div><span class="text-slate-300 font-medium block mb-1">✨ Backend API</span>Machine Learning service berjalan di Replit untuk analisis URL real-time</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URL = 'https://python-hub--allengt05.replit.app';
+        
+        let lastScanResult = null;
+        let lastScanUrl = null;
+
+        async function checkPhishing() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) { alert('Masukkan URL terlebih dahulu!'); return; }
+
+            document.getElementById('checkBtn').disabled = true;
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('result').classList.add('hidden');
+
+            try {
+                const resp = await fetch(`${API_URL}/predict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: url})
+                });
+                if (!resp.ok) throw new Error('Service tidak tersedia');
+                const data = await resp.json();
+                lastScanResult = data;
+                lastScanUrl = url;
+                showResult(data);
+            } catch (e) {
+                const data = clientSideCheck(url);
+                data._fallback = true;
+                lastScanResult = data;
+                lastScanUrl = url;
+                showResult(data);
+            } finally {
+                document.getElementById('checkBtn').disabled = false;
+                document.getElementById('loadingState').classList.add('hidden');
+            }
+        }
+
+        function clientSideCheck(url) {
+            let score = 0; const reasons = [];
+            const low = url.toLowerCase();
+            if (/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(url)) { score+=25; reasons.push('IP address digunakan sebagai domain'); }
+            if (url.length > 75) { score+=10; reasons.push('URL terlalu panjang ('+url.length+' karakter)'); }
+            if ((url.match(/\./g)||[]).length > 4) { score+=10; reasons.push('Banyak titik dalam URL'); }
+            if (url.includes('@')) { score+=20; reasons.push('Simbol @ ditemukan di URL'); }
+            if (!url.startsWith('https')) { score+=5; reasons.push('Tidak menggunakan HTTPS'); }
+            const keywords = ['login','signin','verify','account','secure','paypal','banking','password','confirm'];
+            const found = keywords.filter(k => low.includes(k));
+            if (found.length) { score+=Math.min(25,found.length*8); reasons.push('Keyword phishing: '+found.join(', ')); }
+            const suspTld = ['.tk','.ml','.ga','.cf','.xyz','.top'];
+            if (suspTld.some(t => low.includes(t))) { score+=20; reasons.push('TLD mencurigakan'); }
+            score = Math.min(100, score);
+            const verdict = score>=70?'PHISHING':score>=40?'SUSPICIOUS':'SAFE';
+            const level = score>=70?'danger':score>=40?'warning':'safe';
+            return {url, score, verdict, level, reasons, features:{url_length:url.length, has_ip:/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(url), is_https:url.startsWith('https'), phishing_keywords:found.length, num_dots:(url.match(/\./g)||[]).length, suspicious_tld:suspTld.some(t=>low.includes(t)), num_hyphens:(url.match(/-/g)||[]).length, subdomain_count:0}, models_used:false};
+        }
+
+        function showResult(data) {
+            const banner = document.getElementById('verdictBanner');
+            const icon = document.getElementById('verdictIcon');
+            const text = document.getElementById('verdictText');
+            const urlEl = document.getElementById('verdictUrl');
+            const scoreEl = document.getElementById('scoreText');
+            const bar = document.getElementById('scoreBar');
+
+            banner.className = 'rounded-2xl p-6 mb-6 border ';
+            icon.className = 'w-14 h-14 rounded-full flex items-center justify-center text-2xl ';
+
+            if (data.level === 'danger') {
+                banner.className += 'bg-red-500/10 border-red-500/30';
+                icon.className += 'bg-red-500/20 pulse-danger';
+                icon.innerHTML = '🚨';
+                text.className = 'text-2xl font-bold text-red-400';
+                text.textContent = '⚠ PHISHING DETECTED';
+                scoreEl.className = 'text-4xl font-bold text-red-400';
+                bar.className = 'score-bar h-2.5 rounded-full bg-red-500';
+            } else if (data.level === 'warning') {
+                banner.className += 'bg-yellow-500/10 border-yellow-500/30';
+                icon.className += 'bg-yellow-500/20 pulse-warning';
+                icon.innerHTML = '⚠️';
+                text.className = 'text-2xl font-bold text-yellow-400';
+                text.textContent = '⚡ SUSPICIOUS URL';
+                scoreEl.className = 'text-4xl font-bold text-yellow-400';
+                bar.className = 'score-bar h-2.5 rounded-full bg-yellow-500';
+            } else {
+                banner.className += 'bg-green-500/10 border-green-500/30';
+                icon.className += 'bg-green-500/20';
+                icon.innerHTML = '✅';
+                text.className = 'text-2xl font-bold text-green-400';
+                text.textContent = '✓ URL AMAN';
+                scoreEl.className = 'text-4xl font-bold text-green-400';
+                bar.className = 'score-bar h-2.5 rounded-full bg-green-500';
+            }
+
+            urlEl.textContent = data.url;
+            scoreEl.textContent = data.score;
+            setTimeout(() => { bar.style.width = data.score + '%'; }, 100);
+
+            // Reasons
+            const reasonsList = document.getElementById('reasonsList');
+            const noReasons = document.getElementById('noReasons');
+            reasonsList.innerHTML = '';
+            if (data.reasons && data.reasons.length > 0) {
+                noReasons.classList.add('hidden');
+                data.reasons.forEach(r => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-start space-x-2 text-sm text-slate-300';
+                    li.innerHTML = '<span class="text-red-400 mt-0.5">•</span><span>'+r+'</span>';
+                    reasonsList.appendChild(li);
+                });
+            } else {
+                noReasons.classList.remove('hidden');
+            }
+
+            // Features
+            const featuresList = document.getElementById('featuresList');
+            featuresList.innerHTML = '';
+            const f = data.features;
+            const featureItems = [
+                {label: 'Panjang URL', value: f.url_length + ' karakter', flag: f.url_length > 75},
+                {label: 'Menggunakan HTTPS', value: f.is_https ? 'Ya ✓' : 'Tidak ✗', flag: !f.is_https},
+                {label: 'IP di URL', value: f.has_ip ? 'Ya ⚠' : 'Tidak', flag: f.has_ip},
+                {label: 'TLD Mencurigakan', value: f.suspicious_tld ? 'Ya ⚠' : 'Tidak', flag: f.suspicious_tld},
+                {label: 'Keyword Phishing', value: f.phishing_keywords + ' ditemukan', flag: f.phishing_keywords > 0},
+                {label: 'Jumlah Titik', value: f.num_dots, flag: f.num_dots > 4},
+                {label: 'Tanda Hubung', value: f.num_hyphens, flag: f.num_hyphens > 2},
+                {label: 'Subdomain', value: f.subdomain_count, flag: f.subdomain_count > 2},
+            ];
+            featureItems.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center py-1.5 border-b border-slate-700/40 last:border-0';
+                div.innerHTML = '<span class="text-xs text-slate-400">'+item.label+'</span><span class="text-xs font-medium '+(item.flag?'text-red-400':'text-green-400')+'">'+item.value+'</span>';
+                featuresList.appendChild(div);
+            });
+            if (data._fallback || !data.models_used) {
+                const note = document.createElement('p');
+                note.className = 'text-xs text-slate-600 mt-3 italic';
+                note.textContent = '* Mode heuristic (backend ML service sedang dijalankan)';
+                featuresList.appendChild(note);
+            }
+
+            document.getElementById('result').classList.remove('hidden');
+            document.getElementById('result').scrollIntoView({behavior: 'smooth'});
+        }
+
+        function resetForm() {
+            document.getElementById('result').classList.add('hidden');
+            document.getElementById('urlInput').value = '';
+            lastScanResult = null;
+            lastScanUrl = null;
+            document.getElementById('urlInput').focus();
+        }
+
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') checkPhishing();
+        });
+    </script>
+</body>
+</html>

@@ -1,10 +1,10 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/phishing/predict", "destination": "/api/predict" },
-    { "source": "/api/phishing/analyze", "destination": "/api/analyze" },
-    { "source": "/phishing", "destination": "/public/phishing.html" },
-    { "source": "/", "destination": "/public/index.html" }
+    { "source": "/api/phishing/predict", "destination": "/api/predict.py" },
+    { "source": "/api/phishing/analyze", "destination": "/api/analyze.py" },
+    { "source": "/phishing", "destination": "/phishing.html" },
+    { "source": "/", "destination": "/index.html" }
   ],
   "headers": [
     {

@@ -8,6 +8,7 @@ import re
 import os
 import warnings
 import sys
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler
@@ -156,6 +157,96 @@ def heuristic_score(url: str):
                     reasons.append(
                         f'Brand impersonation: nama "{brand}" ada di domain tidak resmi '
                         f'(domain resmi: {", ".join(official_list[:2])})'
+                    )
+                    break
+    except Exception:
+        pass
+
+
+    # ── IDN / Punycode Homograph Attack Detection ──────────────────────────────
+    try:
+        parsed_idn = urlparse(url if '://' in url else 'http://' + url)
+        netloc_raw = parsed_idn.netloc.lower().split(':')[0]
+
+        # Check if domain uses Punycode (xn-- prefix = IDN homograph attack)
+        domain_parts = netloc_raw.split('.')
+        has_punycode = any(p.startswith('xn--') for p in domain_parts)
+        if has_punycode:
+            score += 60
+            reasons.append(
+                'Domain menggunakan Punycode/IDN (xn--) — teknik homograph attack '
+                'yang menyamarkan karakter Unicode agar terlihat seperti domain resmi'
+            )
+
+        # Decode the Punycode domain and check brand impersonation
+        try:
+            decoded_domain = netloc_raw.encode('ascii').decode('ascii')
+            # Try to decode each label
+            decoded_parts = []
+            for part in domain_parts:
+                try:
+                    decoded_parts.append(part.encode('ascii').decode('punycode') if part.startswith('xn--') else part)
+                except Exception:
+                    decoded_parts.append(part)
+            decoded_domain = '.'.join(decoded_parts)
+            decoded_domain = re.sub(r'^www\.', '', decoded_domain)
+
+            for brand, official_list in BRAND_DOMAINS.items():
+                if brand in decoded_domain:
+                    is_official = any(
+                        decoded_domain == od or decoded_domain.endswith('.' + od)
+                        for od in official_list
+                    )
+                    if not is_official:
+                        score += 65
+                        reasons.append(
+                            f'Homograph/IDN impersonation: domain terlihat seperti "{brand}" '
+                            f'setelah decode Unicode (domain resmi: {", ".join(official_list[:2])})'
+                        )
+                        break
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    # ── Typosquatting / Lookalike Detection (Levenshtein) ──────────────────────
+    BRAND_ROOTS = [
+        'paypal','google','gmail','microsoft','apple','icloud','amazon','netflix',
+        'facebook','instagram','whatsapp','tiktok','shopee','tokopedia','gojek',
+        'gopay','dana','ovo','linkaja','mandiri','klikbca','brimo','bni','bri',
+        'jenius','pertamina','mypertamina','traveloka','bukalapak','lazada',
+    ]
+    def _lev(a, b):
+        if abs(len(a) - len(b)) > 2: return 99
+        m, n = len(a), len(b)
+        dp = list(range(n + 1))
+        for i in range(1, m + 1):
+            prev = dp[0]; dp[0] = i
+            for j in range(1, n + 1):
+                temp = dp[j]
+                dp[j] = prev if a[i-1] == b[j-1] else 1 + min(prev, dp[j], dp[j-1])
+                prev = temp
+        return dp[n]
+
+    try:
+        parsed_ts = urlparse(url if '://' in url else 'http://' + url)
+        ts_domain = re.sub(r'^www\.', '', parsed_ts.netloc.lower().split(':')[0])
+        ts_root   = ts_domain.split('.')[0]  # e.g. 'paypa1' from 'paypa1.com'
+        for brand in BRAND_ROOTS:
+            dist = _lev(ts_root, brand)
+            # Distance 1-2 = typosquat (e.g. paypa1, g00gle, amazom)
+            if 0 < dist <= 2:
+                # Make sure it's NOT the official domain itself
+                official_domains = BRAND_DOMAINS.get(brand, [])
+                is_official = any(
+                    ts_domain == od or ts_domain.endswith('.' + od)
+                    for od in official_domains
+                )
+                if not is_official:
+                    score += 55
+                    reasons.append(
+                        f'Typosquatting: domain "{ts_root}" sangat mirip brand "{brand}" '
+                        f'(beda {dist} karakter) — kemungkinan domain jebakan'
                     )
                     break
     except Exception:

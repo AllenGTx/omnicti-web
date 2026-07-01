@@ -339,6 +339,16 @@ INPUT:
 // cleanJSON sanitizes the raw string response from the AI.
 func cleanJSON(s string) string {
         s = strings.TrimSpace(s)
+        
+        // Find the first '{' and last '}'
+        start := strings.Index(s, "{")
+        end := strings.LastIndex(s, "}")
+        
+        if start != -1 && end != -1 && end > start {
+                return s[start : end+1]
+        }
+        
+        // Fallback to original trimming if brackets aren't found properly
         s = strings.TrimPrefix(s, "```json")
         s = strings.TrimPrefix(s, "```")
         s = strings.TrimSuffix(s, "```")

@@ -107,7 +107,7 @@ Berikan analisis dalam format JSON MURNI (tanpa markdown, langsung JSON):
 
     try:
         payload = json.dumps({
-            "model": "llama-3.3-70b-versatile",
+            "model": "llama3-8b-8192",
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.3,
             "max_tokens": 1500

@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "pip install -r requirements.txt",
   "rewrites": [
     { "source": "/api/phishing/predict", "destination": "/api/predict" },
     { "source": "/api/phishing/analyze", "destination": "/api/analyze" },

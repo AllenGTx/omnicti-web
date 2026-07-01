@@ -260,24 +260,34 @@ def heuristic_score(url: str):
     try:
         parsed_ts = urlparse(url if '://' in url else 'http://' + url)
         ts_domain = re.sub(r'^www\.', '', parsed_ts.netloc.lower().split(':')[0])
-        ts_root   = ts_domain.split('.')[0]  # e.g. 'paypa1' from 'paypa1.com'
-        for brand in BRAND_ROOTS:
-            dist = _lev(ts_root, brand)
-            # Distance 1-2 = typosquat (e.g. paypa1, g00gle, amazom)
-            if 0 < dist <= 2:
-                # Make sure it's NOT the official domain itself
-                official_domains = BRAND_DOMAINS.get(brand, [])
-                is_official = any(
-                    ts_domain == od or ts_domain.endswith('.' + od)
-                    for od in official_domains
-                )
-                if not is_official:
-                    score += 55
-                    reasons.append(
-                        f'Typosquatting: domain "{ts_root}" sangat mirip brand "{brand}" '
-                        f'(beda {dist} karakter) — kemungkinan domain jebakan'
+        # Ambil semua bagian domain kecuali TLD (2 part terakhir biasanya domain utama + tld)
+        parts = ts_domain.split('.')
+        
+        for part in parts:
+            if len(part) < 5: continue # Skip part yang terlalu pendek (rawan false positive)
+            for brand in BRAND_ROOTS:
+                if len(brand) < 4: continue # Skip brand yang terlalu pendek untuk typosquatting
+                
+                dist = _lev(part, brand)
+                # Syarat jarak: max 1 typo untuk kata 5 huruf, max 2 typo untuk kata panjang
+                max_dist = 1 if len(brand) <= 6 else 2
+                
+                if 0 < dist <= max_dist:
+                    # Make sure it's NOT the official domain itself
+                    official_domains = BRAND_DOMAINS.get(brand, [])
+                    is_official = any(
+                        ts_domain == od or ts_domain.endswith('.' + od)
+                        for od in official_domains
                     )
-                    break
+                    if not is_official:
+                        score += 55
+                        reasons.append(
+                            f'Typosquatting: bagian URL "{part}" sangat mirip brand "{brand}" '
+                            f'(beda {dist} karakter) — kemungkinan domain jebakan'
+                        )
+                        break
+            if score > 0: break # Udah ketahuan typosquat, ga perlu cek part lain
+
     except Exception:
         pass
 

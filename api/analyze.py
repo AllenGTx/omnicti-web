@@ -32,15 +32,27 @@ class handler(BaseHTTPRequestHandler):
 
         scan_result = data.get('result', {})
 
-        # Try Groq first, fallback to HuggingFace
+        # Try Groq first, fallback to HuggingFace, then rule-based
         groq_key = os.environ.get('GROQ_API_KEY', '')
         hf_key   = os.environ.get('HF_TOKEN', os.environ.get('HUGGINGFACE_TOKEN', ''))
 
+        ai_result = None
+
+        # Try Groq if key looks valid
         if groq_key and groq_key.startswith('gsk_'):
-            ai_result = groq_analyze(url, scan_result, groq_key)
-        elif hf_key:
-            ai_result = hf_analyze(url, scan_result, hf_key)
-        else:
+            result = groq_analyze(url, scan_result, groq_key)
+            if 'error' not in result:
+                ai_result = result
+            # else: fall through to HF
+
+        # Try HuggingFace if Groq failed or not configured
+        if ai_result is None and hf_key:
+            result = hf_analyze(url, scan_result, hf_key)
+            if 'error' not in result:
+                ai_result = result
+
+        # Always-available fallback
+        if ai_result is None:
             ai_result = rule_based_analyze(url, scan_result)
 
         self._respond(200, {'ai_analysis': ai_result, 'url': url})

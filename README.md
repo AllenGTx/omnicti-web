@@ -1,14 +1,3 @@
----
-title: OmniCTI Security Suite
-emoji: 🛡️
-colorFrom: indigo
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
-suggested_hardware: cpu-basic
----
-
 # 🛡️ OmniCTI Security Suite
 
 OmniCTI Security Suite adalah platform intelijen ancaman siber (*Cyber Threat Intelligence*) all-in-one yang dirancang untuk menganalisis risiko keamanan domain dan mendeteksi tautan *phishing* secara cerdas dan real-time.

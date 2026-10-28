@@ -13,6 +13,8 @@ suggested_hardware: cpu-basic
 
 OmniCTI Security Suite adalah platform intelijen ancaman siber (*Cyber Threat Intelligence*) all-in-one yang dirancang untuk menganalisis risiko keamanan domain dan mendeteksi tautan *phishing* secara cerdas dan real-time.
 
+🌐 **Live Demo (Vercel)**: [https://omnicti-web.vercel.app/](https://omnicti-web.vercel.app/)
+
 ---
 
 ## ✨ Fitur Utama
@@ -32,12 +34,19 @@ Mesin deteksi tautan phishing canggih berlapis untuk melindungi pengguna dari ke
 
 ---
 
-## 🚀 Teknologi
+## 🚀 Live Deployment
+
+- **Web App (Vercel)**: [https://omnicti-web.vercel.app/](https://omnicti-web.vercel.app/)
+- **Backend / Engine (Hugging Face Space)**: [https://allengt-omnicti.hf.space](https://allengt-omnicti.hf.space)
+
+---
+
+## 🛠️ Teknologi
 
 - **Backend**: Go (Golang) & Python Serverless Functions
 - **Frontend**: HTML5, Tailwind CSS, JavaScript (Responsive Mobile & Desktop)
 - **AI Engine**: Google Gemini API & Groq API
-- **Deployment**: Hugging Face Spaces (Docker) / Vercel
+- **Deployment**: Vercel & Hugging Face Spaces (Docker)
 
 ---
 

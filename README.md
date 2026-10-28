@@ -30,6 +30,47 @@ Mesin deteksi tautan phishing canggih berlapis untuk melindungi pengguna dari ke
 
 ---
 
+## 💻 Menjalankan di Lokal
+
+### Prasyarat
+- [Go](https://go.dev/dl/) 1.24+
+- [Python](https://www.python.org/downloads/) 3.11+
+
+### Langkah
+```bash
+# 1. Clone repo
+git clone https://github.com/AllenGTx/omnicti-web.git
+cd omnicti-web
+
+# 2. Install dependency Python (untuk ML phishing detector)
+pip install -r requirements.txt
+
+# 3. Siapkan API key
+cp .env.example .env      # Windows: copy .env.example .env
+# lalu isi key di file .env (semua opsional, isi yang kamu punya)
+
+# 4. Jalankan
+./run_local.sh            # Linux/macOS
+run_local.bat             # Windows
+```
+
+Buka **http://localhost:8080** di browser.
+
+- **Phishing Detector** berjalan lewat `phishing_service.py` (port 5001, internal). Tanpa key apapun pun tetap jalan (mode heuristic + ML).
+- **Domain Checker** butuh minimal satu key sumber CTI (mis. `VIRUSTOTAL_KEY`, `SHODAN_KEY`) dan `GEMINI_API_KEY` / `GROQ_API_KEY` untuk analisis AI. Jika Gemini limit, otomatis pindah ke Groq.
+- Pakai CLI tanpa web: `go run ./cmd/domain-intel example.com` (opsi: `-json`, `-report hasil.html`, `-v`).
+
+### Struktur file penting
+| Path | Fungsi |
+|---|---|
+| `cmd/`, `internal/`, `go.mod` | Backend Go (Domain Checker + web server) |
+| `phishing_service.py`, `*.joblib` | Mesin ML phishing untuk lokal/Docker |
+| `api/`, `public/`, `vercel.json` | Versi serverless + UI untuk Vercel |
+| `Dockerfile`, `docker-start.sh` | Deploy Hugging Face Spaces |
+| `.env.example` | Template API key |
+
+---
+
 ## 🛠️ Teknologi
 
 - **Backend**: Go (Golang) & Python Serverless Functions

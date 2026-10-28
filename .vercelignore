@@ -1,0 +1,11 @@
+cmd/
+internal/
+go.mod
+go.sum
+Dockerfile
+docker-start.sh
+phishing_service.py
+SCORING.md
+.env.example
+run_local.bat
+run_local.sh
